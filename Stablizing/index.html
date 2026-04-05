@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CSRS: Stabilizing Unsupervised Self-Evolution of MLLMs via Continuous Softened Retracing reSampling</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📐</text></svg>">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #2563eb;
+            --secondary: #ec4899;
+            --background: #ffffff;
+            --text: #1e293b;
+            --card-bg: #f8fafc;
+            --bestcol: #0066cc;
+            --propose: #EF8E8D;
+            --solve: #5755A3;
+            --primary-rgb: 37, 99, 235;
+            --text-rgb: 30, 41, 59;
+            --card-bg-rgb: 248, 250, 252;
+        }
+        .dark-mode {
+            --primary: #60a5fa;
+            --secondary: #f472b6;
+            --background: #0f172a;
+            --text: #e2e8f0;
+            --card-bg: #1e293b;
+            --primary-rgb: 96, 165, 250;
+            --text-rgb: 226, 232, 240;
+            --card-bg-rgb: 30, 41, 59;
+        }
+        body { font-family: 'Space Grotesk', sans-serif; background-color: var(--background); color: var(--text); transition: all 0.5s ease; counter-reset: figure-counter; }
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; z-index: -1; opacity: 0.1; }
+        .side-nav { position: fixed; left: 10px; top: 50%; transform: translateY(-50%); z-index: 9000; background: transparent; border: none; border-radius: 0; padding: 0; backdrop-filter: none; box-shadow: none; width: auto; }
+        .side-nav ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+        .side-nav a { display: block; position: relative; padding: 10px 12px; border-radius: 12px; color: var(--text); text-decoration: none; font-weight: 600; font-size: 0.95rem; opacity: 0.82; transition: all 0.2s ease; overflow: hidden; }
+        .side-nav a::before { content: ''; position: absolute; left: 0; top: 10%; height: 80%; width: 3px; border-radius: 2px; background: linear-gradient(to bottom, var(--primary), var(--secondary)); opacity: 0; transform: translateX(-6px); transition: 0.2s; }
+        .side-nav a:hover { background: rgba(var(--primary-rgb), 0.10); opacity: 1; transform: translateX(2px); }
+        .side-nav a.active { background: rgba(var(--primary-rgb), 0.14); opacity: 1; }
+        .side-nav a.active::before { opacity: 1; transform: translateX(0); }
+        .reading-progress { position: fixed; right: 22px; top: 50%; transform: translateY(-50%); z-index: 9000; width: 14px; height: 320px; border-radius: 999px; background: rgba(var(--card-bg-rgb), 0.55); border: 1px solid rgba(var(--primary-rgb), 0.18); backdrop-filter: blur(10px); overflow: hidden; }
+        .reading-progress .fill { position: absolute; left: 0; top: 0; width: 100%; height: 0%; background: linear-gradient(to top, var(--primary), var(--secondary)); transition: height 80ms linear; }
+        @media (max-width: 1100px) { .side-nav, .reading-progress { display: none; } }
+        .hero { min-height: auto; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem; text-align: center; position: relative; overflow: hidden; margin-top: 2rem; }
+        .hero h1 { font-size: 3.5rem; margin-bottom: 1rem; line-height: 1.2; max-width: 1200px; margin-left: auto; margin-right: auto; }
+        .hero h1 .title-highlight { background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+        .authors { font-size: 1.1rem; margin-bottom: 1.5rem; opacity: 0.9; }
+        .author-list { margin-bottom: 0.8rem; line-height: 1.6; }
+        .author-list a { color: var(--text); text-decoration: none; transition: color 0.2s; }
+        .author-list a:hover { color: var(--primary); }
+        .affiliations { font-size: 0.9rem; margin-bottom: 0.3rem; }
+        .corresponding-note { font-size: 0.8rem; opacity: 0.8; font-style: italic; }
+        .emails { font-size: 0.85rem; opacity: 0.7; font-family: monospace; }
+        .links { display: flex; gap: 2rem; margin-top: 1rem; animation: fadeInUp 1s ease 0.6s backwards; }
+        .links a { color: var(--text); text-decoration: none; transition: transform 0.3s ease; }
+        .links a:hover { transform: translateY(-5px); }
+        .link-item { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+        .link-item i { font-size: 1.8rem; background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .content { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+        .section { margin: 5rem 0; opacity: 0; transform: translateY(20px); transition: all 0.6s ease; }
+        .section.visible { opacity: 1; transform: translateY(0); }
+        .section h2 { font-size: 2.5rem; margin-bottom: 2rem; background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .paradigm-explanation { background: var(--card-bg); border-radius: 1rem; padding: 1.8rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 4px solid var(--primary); line-height: 1.7; }
+        .performance-highlight { max-width: 1275px; margin: 4rem auto 1rem; padding: 0 2rem; }
+        .section-title { font-size: 2.8rem; margin-bottom: 2rem; background: linear-gradient(to right, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; }
+        .highlight-container { background: var(--card-bg); border-radius: 1rem; padding: 1.6rem; box-shadow: 0 4px 16px -1px rgba(0,0,0,0.1); }
+        .proposed-method-grid { display: grid; grid-template-columns: 1fr 1.25fr; gap: 1.5rem; align-items: start; }
+        .method-callout { background: rgba(var(--card-bg-rgb),0.7); border-left: 4px solid var(--primary); border-radius: 1rem; padding: 1.25rem; }
+        .method-figure img { width: 100%; border-radius: 0.9rem; box-shadow: 0 12px 28px rgba(0,0,0,0.12); }
+        .method-cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.25rem; margin-top: 1.5rem; }
+        .method-card { background: rgba(var(--card-bg-rgb),0.7); border-radius: 0.9rem; padding: 1.15rem; box-shadow: 0 8px 22px rgba(0,0,0,0.08); transition: transform 0.25s; }
+        .method-card:hover { transform: translateY(-6px); }
+        .method-card h4 { margin-bottom: 0.5rem; font-size: 1.1rem; }
+        .method-card p { font-size: 0.95rem; line-height: 1.6; opacity: 0.88; }
+        .numbered-figure { margin: 2rem auto; counter-increment: figure-counter; background: var(--card-bg); border-radius: 1rem; padding: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .numbered-figure::before { content: "Figure " counter(figure-counter); display: block; font-weight: 600; color: var(--primary); margin-bottom: 1rem; }
+        .research-image { width: 100%; border-radius: 0.5rem; cursor: zoom-in; }
+        .latex-caption { font-size: 0.95rem; line-height: 1.5; margin-top: 1rem; padding: 0.5rem; background: rgba(0,0,0,0.05); border-radius: 0.5rem; }
+        .results-table-container { overflow-x: auto; margin: 2rem 0; }
+        .results-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: var(--card-bg); }
+        .results-table th, .results-table td { padding: 0.5rem; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+        .results-table .ours-row { background: rgba(37,99,235,0.15); font-weight: 600; }
+        .best-result { font-weight: 700; color: var(--primary); }
+        .table-caption { margin-top: 1rem; font-size: 0.85rem; padding: 1rem; background: rgba(0,0,0,0.05); border-radius: 0.5rem; }
+        .bibtex-container { margin: 2rem 0; background: var(--card-bg); border-radius: 1rem; padding: 1.5rem; }
+        .bibtex-container pre { white-space: pre-wrap; word-wrap: break-word; font-family: 'Space Mono', monospace; font-size: 0.9rem; }
+        .back-to-top { position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; border: none; cursor: pointer; z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; transform: translateY(20px); transition: all 0.3s; }
+        .back-to-top.visible { opacity: 1; transform: translateY(0); }
+        .image-popup { display: none; position: fixed; z-index: 10001; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); cursor: pointer; }
+        .image-popup-content { margin: auto; display: block; max-width: 85%; max-height: 85%; object-fit: contain; }
+        .image-popup-close { position: absolute; top: 15px; right: 35px; color: white; font-size: 40px; cursor: pointer; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 768px) { .hero h1 { font-size: 2.2rem; } .method-cards { grid-template-columns: 1fr; } .proposed-method-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body class="dark-mode">
+<div id="canvas-container"></div>
+<nav class="side-nav">
+    <ul>
+        <li><a href="#top" data-section="top">Home</a></li>
+        <li><a href="#abstract" data-section="abstract">Abstract</a></li>
+        <li><a href="#method" data-section="method">Method</a></li>
+        <li><a href="#experiments" data-section="experiments">Experiments</a></li>
+        <li><a href="#citation" data-section="citation">Citation</a></li>
+    </ul>
+</nav>
+<div class="reading-progress"><div class="fill" id="reading-progress-fill"></div></div>
+<button id="back-to-top" class="back-to-top"><i class="fas fa-rocket"></i></button>
+
+<div class="hero" id="top">
+    <h1><span class="title-highlight">Continuous Softened Retracing reSampling (CSRS):</span><br>Stabilizing Unsupervised Self-Evolution of MLLMs</h1>
+    <div class="authors">
+        <div class="author-list">
+            <span>Yunyao Yu<sup>1</sup></span>, <span>Zhengxian Wu<sup>1</sup></span>, <span>Zhuohong Chen<sup>1</sup></span>, <span>Hangrui Xu<sup>2</sup></span>, <span>Zirui Liao<sup>3</sup></span>,
+            <span>Xiangwen Deng<sup>4</sup></span>, <span>Zhifang Liu<sup>5</sup></span>, <span>Senyuan Shi<sup>6</sup></span>, <span>Haoqian Wang<sup>1,†</sup></span>
+        </div>
+        <div class="affiliations"><sup>1</sup>Tsinghua University &nbsp;|&nbsp; <sup>2</sup>Hefei University of Technology &nbsp;|&nbsp; <sup>3</sup>NTU &nbsp;|&nbsp; <sup>4</sup>PKU &nbsp;|&nbsp; <sup>5</sup>Fudan &nbsp;|&nbsp; <sup>6</sup>ZJU</div>
+        <div class="corresponding-note"><sup>†</sup>Corresponding author: wanghaoqian@tsinghua.edu.cn</div>
+        <div class="emails">yuyy25@mails.tsinghua.edu.cn, zx-wu24@mails.tsinghua.edu.cn</div>
+    </div>
+    <div class="links">
+        <a href="https://arxiv.org/abs/2603.21289" target="_blank"><div class="link-item"><i class="fas fa-book-open"></i><span>Paper</span></div></a>
+        <a href="https://github.com/yyy195/CSRS" target="_blank"><div class="link-item"><i class="fab fa-github"></i><span>Code</span></div></a>
+        <a href="#citation"><div class="link-item"><i class="fas fa-quote-right"></i><span>Citation</span></div></a>
+    </div>
+</div>
+
+<div class="content">
+    <section class="section" id="abstract">
+        <h2>Abstract</h2>
+        <div class="paradigm-explanation">
+            <p>In the unsupervised self-evolution of Multimodal Large Language Models (MLLMs), existing methods relying on majority voting often lead to <strong>model collapse</strong>—the model reinforces its own biases and loses logical diversity. To counteract this, we propose <strong>Continuous Softened Retracing reSampling (CSRS)</strong>, a novel framework that stabilizes self-evolution via three synergistic components:</p>
+            <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                <li><strong>Retracing Re-inference Mechanism (RRM)</strong>: restarts reasoning from critical anchor points to explore long-tail logical paths.</li>
+                <li><strong>Softened Frequency Reward (SFR)</strong>: replaces binary rewards with continuous signals calibrated by answer frequency, damping distributional polarization.</li>
+                <li><strong>Visual Semantic Perturbation (VSP)</strong>: injects noise into images to force reliance on invariant mathematical logic rather than superficial visual cues.</li>
+            </ul>
+            <p style="margin-top: 1rem;">Experiments on Qwen2.5-VL-7B across MathVision, MathVerse, MathVista, and WeMath show that CSRS consistently outperforms MM-UPT and other unsupervised baselines, achieving state-of-the-art results (e.g., 68.25% on MathVista) while mitigating model collapse.</p>
+        </div>
+    </section>
+
+    <section class="section" id="method">
+        <h2>Proposed Method</h2>
+        <div class="performance-highlight" style="margin:0; padding:0; max-width:100%;">
+            <div class="highlight-container">
+                <div class="proposed-method-grid">
+                    <div class="method-callout">
+                        <h3>Key Theoretical Insight</h3>
+                        <p>Majority voting leads to exponential contrast factor \(G_{MV} = e^{\eta}\), while SFR yields \(G_{SF} = e^{\eta(\rho-\epsilon)} < G_{MV}\). This mathematically proves that softened rewards slow down distribution collapse, preserving exploratory diversity.</p>
+                        <p style="margin-top:1rem;"><strong>Algorithm 1: CSRS</strong> — For each input, sample n maternal trajectories, then re-infer from anchor points (rate ω) with m rollouts, compute softened frequency rewards, and optimize via GRPO.</p>
+                    </div>
+                    <div class="method-figure">
+                        <img src="https://placehold.co/800x400/1e293b/60a5fa?text=CSRS+Framework" alt="CSRS pipeline" class="research-image" style="background:#1e293b; object-fit: cover;">
+                        <div class="latex-caption">Overview: RRM expands local exploration; SFR calibrates rewards based on frequency variance; VSP enforces logical invariance.</div>
+                    </div>
+                </div>
+                <div class="method-cards">
+                    <div class="method-card"><h4>🔄 Retracing Re‑inference</h4><p>Truncate at anchor point (ω=0.7 optimal) and resample m=5 times. Expands coverage of rare correct paths without exhaustive global search.</p></div>
+                    <div class="method-card"><h4>⚖️ Softened Frequency Reward</h4><p>\(R_{final} = (\gamma \tanh(\beta(\frac{f_r}{f_{base}}-1))+1)\times R_{base}\). Dynamically upweights low‑frequency but consistent answers.</p></div>
+                    <div class="method-card"><h4>🎨 Visual Perturbation</h4><p>Gaussian noise on images prevents shortcut learning, forces reliance on geometric logic → more robust reasoning.</p></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section" id="experiments">
+        <h2>Experiments & Results</h2>
+        <figure class="numbered-figure">
+            <img src="https://placehold.co/1000x500/1e293b/60a5fa?text=Main+Results+Table" class="research-image" alt="Main results table">
+            <figcaption class="latex-caption"><strong>Main results on multimodal reasoning benchmarks.</strong> CSRS achieves consistent gains over MM-UPT and base models. Best results in <span style="color:var(--primary)">blue</span>.</figcaption>
+        </figure>
+        <div class="results-table-container">
+            <table class="results-table">
+                <thead><tr><th>Training Data</th><th>Method</th><th>MathVision</th><th>MathVerse</th><th>MathVista</th><th>WeMath</th><th>Avg.</th></tr></thead>
+                <tbody>
+                    <tr><td>—</td><td>Qwen2.5-VL-7B</td><td>25.40</td><td>44.24</td><td>66.42</td><td>67.65</td><td>50.93</td></tr>
+                    <tr><td>Geometry3K</td><td>MM-UPT</td><td>26.95</td><td>44.53</td><td>66.47</td><td>68.49</td><td>51.61</td></tr>
+                    <tr class="ours-row"><td>Geometry3K</td><td><strong>CSRS (Ours)</strong></td><td class="best-result">27.97</td><td class="best-result">46.01</td><td class="best-result">67.81</td><td class="best-result">71.77</td><td class="best-result">53.39</td></tr>
+                    <tr><td>GeoQA</td><td>MM-UPT</td><td>26.61</td><td>44.15</td><td>65.84</td><td>68.25</td><td>51.21</td></tr>
+                    <tr class="ours-row"><td>GeoQA</td><td><strong>CSRS (Ours)</strong></td><td class="best-result">28.95</td><td>45.82</td><td class="best-result">68.25</td><td>69.32</td><td class="best-result">53.09</td></tr>
+                    <tr><td>MMR1</td><td>MM-UPT</td><td>25.98</td><td>45.12</td><td>66.27</td><td>69.14</td><td>51.63</td></tr>
+                    <tr class="ours-row"><td>MMR1</td><td><strong>CSRS (Ours)</strong></td><td>27.86</td><td>45.89</td><td>67.81</td><td>70.53</td><td>53.05</td></tr>
+                </tbody>
+            </table>
+            <div class="table-caption"><strong>Table 1: Comparison with unsupervised methods.</strong> CSRS consistently outperforms MM-UPT across all benchmarks, with largest gains on WeMath (+3.28%) and MathVision (+2.34%).</div>
+        </div>
+
+        <figure class="numbered-figure">
+            <img src="https://placehold.co/1000x400/1e293b/60a5fa?text=Ablation+Studies" class="research-image" alt="Ablation">
+            <figcaption class="latex-caption"><strong>Ablation of CSRS components on Geometry3K.</strong> Full CSRS: 27.97 (MathVision). Removing SFR → 26.52, removing RRM → 26.85, removing VSP → 25.55. Each component contributes meaningfully.</figcaption>
+        </figure>
+        <div class="results-table-container">
+            <table class="results-table" style="width:80%; margin:0 auto;">
+                <thead><tr><th>Module</th><th>MathVision</th><th>MathVista</th><th>WeMath</th></tr></thead>
+                <tbody>
+                    <tr><td>Majority Vote (Baseline)</td><td>25.40</td><td>66.42</td><td>67.65</td></tr>
+                    <tr><td>+ SFR</td><td>26.52</td><td>67.15</td><td>69.42</td></tr>
+                    <tr><td>+ RRM</td><td>26.85</td><td>67.38</td><td>69.85</td></tr>
+                    <tr><td>+ SFR+RRM</td><td>27.68</td><td>67.62</td><td>71.30</td></tr>
+                    <tr class="ours-row"><td><strong>Full CSRS</strong></td><td><strong>27.97</strong></td><td><strong>67.81</strong></td><td><strong>71.77</strong></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <figure class="numbered-figure">
+            <img src="https://placehold.co/1000x400/1e293b/60a5fa?text=t-SNE+Semantic+Evolution" class="research-image" alt="t-SNE">
+            <figcaption class="latex-caption"><strong>Figure: t-SNE visualization of maternal (blue) vs. re-inference (orange) answer sets.</strong> Re-inference set maintains larger semantic diversity, preventing premature collapse to high‑frequency modes.</figcaption>
+        </figure>
+
+        <div class="paradigm-explanation" style="margin-top: 2rem;">
+            <h3 style="color:var(--primary); margin-bottom:0.5rem;">Key Findings</h3>
+            <ul>
+                <li><strong>Mitigating Model Collapse:</strong> CSRS slows entropy decay compared to majority voting, preserving exploration.</li>
+                <li><strong>Optimal Hyperparameters:</strong> Retracing rate ω=0.7, re-inference size m=5, γ=0.2, β=5.0 achieve best trade-off.</li>
+                <li><strong>Generalization:</strong> CSRS also boosts InternVL3-8B (+2.6% avg) and ThinkLite-VL-7B, showing architecture agnostic.</li>
+            </ul>
+        </div>
+    </section>
+
+    <section class="section" id="citation">
+        <h2>Citation</h2>
+        <div class="bibtex-container">
+            <pre><code>@misc{yu2026csrs,
+    title={Stabilizing Unsupervised Self-Evolution of MLLMs via Continuous Softened Retracing reSampling},
+    author={Yunyao Yu and Zhengxian Wu and Zhuohong Chen and Hangrui Xu and Zirui Liao and Xiangwen Deng and Zhifang Liu and Senyuan Shi and Haoqian Wang},
+    year={2026},
+    eprint={2603.21289},
+    archivePrefix={arXiv},
+    primaryClass={cs.CV},
+    url={https://arxiv.org/abs/2603.21289}
+}</code></pre>
+        </div>
+        <div style="text-align: center; margin-top: 2rem; font-size:0.85rem; opacity:0.7;">
+            This website is inspired by <a href="https://arxiv.org/abs/2505.03335" target="_blank" style="color:var(--primary)">Absolute Zero</a>. Code & models available at <a href="https://github.com/yyy195/CSRS" target="_blank" style="color:var(--primary)">github.com/yyy195/CSRS</a>.
+        </div>
+    </section>
+</div>
+
+<div id="image-popup" class="image-popup"><span class="image-popup-close">&times;</span><img class="image-popup-content" id="popup-img"><div class="image-popup-caption" id="popup-caption"></div></div>
+
+<script>
+    // Background animation (simple petals)
+    (function bgAnimation() {
+        const container = document.getElementById('canvas-container');
+        if(!container) return;
+        const canvas = document.createElement('canvas');
+        container.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        let width = window.innerWidth, height = window.innerHeight;
+        function resize() { width = window.innerWidth; height = window.innerHeight; canvas.width = width; canvas.height = height; canvas.style.width = '100%'; canvas.style.height = '100%'; }
+        window.addEventListener('resize', resize); resize();
+        const petals = Array.from({length: 45}, () => ({x: Math.random()*width, y: Math.random()*height, vy: 0.4+Math.random()*0.8, vx: (Math.random()-0.5)*0.3, size: 8+Math.random()*12, alpha: 0.2+Math.random()*0.3, tint: Math.random()>0.5?'primary':'secondary'}));
+        function getColors() { const styles = getComputedStyle(document.documentElement); return { primary: styles.getPropertyValue('--primary').trim(), secondary: styles.getPropertyValue('--secondary').trim() }; }
+        function draw() { if(!ctx) return; ctx.clearRect(0,0,width,height); const colors = getColors(); petals.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; if(p.y>height+50) p.y=-50; if(p.x>width+50) p.x=-50; if(p.x<-50) p.x=width+50; ctx.beginPath(); ctx.ellipse(p.x,p.y,p.size*0.6,p.size,0,0,Math.PI*2); ctx.fillStyle = `rgba(${p.tint==='primary'? '37,99,235':'236,72,153'}, ${p.alpha})`; ctx.fill(); }); requestAnimationFrame(draw); }
+        draw();
+    })();
+
+    // Intersection Observer
+    const sections = document.querySelectorAll('.section');
+    const observer = new IntersectionObserver((entries)=>entries.forEach(e=>e.isIntersecting&&e.target.classList.add('visible')), {threshold:0.1});
+    sections.forEach(s=>observer.observe(s));
+
+    // Side nav + progress
+    const navLinks = document.querySelectorAll('.side-nav a');
+    const fill = document.getElementById('reading-progress-fill');
+    function updateProgress() { const win = window; const doc = document.documentElement; const max = Math.max(1, doc.scrollHeight - win.innerHeight); const p = win.scrollY / max; if(fill) fill.style.height = `${p*100}%`; }
+    function setActive() { const y = window.scrollY + 100; let current = 'top'; document.querySelectorAll('[id]').forEach(el=>{ if(el.offsetTop <= y) current = el.id; }); navLinks.forEach(a=>{ const href = a.getAttribute('href').slice(1); a.classList.toggle('active', href===current); }); }
+    window.addEventListener('scroll', ()=>{ updateProgress(); setActive(); }); updateProgress(); setActive();
+    navLinks.forEach(a=>a.addEventListener('click',(e)=>{ e.preventDefault(); const target = document.querySelector(a.getAttribute('href')); if(target) window.scrollTo({top:target.offsetTop-20, behavior:'smooth'}); }));
+
+    // Back to top
+    const btt = document.getElementById('back-to-top');
+    window.addEventListener('scroll',()=>{ btt.classList.toggle('visible', window.scrollY>300); });
+    btt.addEventListener('click',()=>{ window.scrollTo({top:0,behavior:'smooth'}); });
+
+    // Image popup
+    const popup = document.getElementById('image-popup');
+    const popupImg = document.getElementById('popup-img');
+    const popupCaption = document.getElementById('popup-caption');
+    document.querySelectorAll('.research-image').forEach(img=>{
+        img.addEventListener('click',()=>{ popup.style.display='flex'; popupImg.src=img.src; popupCaption.textContent=img.closest('figure')?.querySelector('.latex-caption')?.innerText||img.alt||''; document.body.style.overflow='hidden'; });
+    });
+    popup.addEventListener('click',(e)=>{ if(e.target===popup||e.target.classList.contains('image-popup-close')) { popup.style.display='none'; document.body.style.overflow=''; } });
+</script>
+</body>
+</html>
